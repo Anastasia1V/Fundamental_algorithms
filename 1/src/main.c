@@ -10,6 +10,7 @@ static void help() {
 int main() {
     help();
     char str[256];
+    char out[256];
     while (1) {
         if (fgets(str, sizeof(str), stdin) == NULL) {
             break;
@@ -30,6 +31,14 @@ int main() {
             fprintf(stderr, "Требуется 1 <= r <= 5.\n");
             help();
             continue;
+        }
+        enum status st = task(number, base, out, sizeof(out));
+        if (st == SUCCESS) {
+            printf("%s\n", out);
+        } else if (st == MEMORY_ERROR) {
+            fprintf(stderr, "Ошибка памяти для %llu\n", number);
+        } else {
+            fprintf(stderr, "Ошибка при обработке %llu\n", number);
         }
     }
     return 0;

@@ -32,7 +32,7 @@ int main() {
             help();
             continue;
         }
-        enum status st = task(number, base, out, sizeof(out));
+        enum status st = number_to_base(number, base, out, sizeof(out));
         if (st == SUCCESS) {
             printf("%s\n", out);
         } else if (st == MEMORY_ERROR) {

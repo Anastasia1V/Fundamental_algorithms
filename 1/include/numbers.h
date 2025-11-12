@@ -10,6 +10,6 @@ enum status {
     MEMORY_ERROR
 };
 
-enum status task(unsigned long long number, unsigned int base, char *out, size_t size);
+enum status number_to_base(unsigned long long number, unsigned int base, char *out, size_t size);
 
 #endif

@@ -17,6 +17,16 @@ int main() {
         if (length == 0) {
             break;
         }
+        int ans = check_brackets(str);
+        if (ans == 0) {
+            printf("Да\n");
+        }
+        else if (ans == 1) {
+            printf("Нет\n");
+        }
+        else {
+            printf("Ошибка памяти\n");
+        }
     }
     return 0;
 }

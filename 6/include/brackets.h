@@ -5,7 +5,6 @@
 
 enum status {
     SUCCESS,
-    INVALID_ARGS,
     MEMORY_ERROR
 };
 

@@ -65,6 +65,40 @@ void push_back_vector(Vector *v, VECTOR_TYPE value) {
     v->size += 1;
 }
 
+void delete_at_vector(Vector *v, size_t index) {
+    if (v == NULL || v->data == NULL) {
+        return;
+    }
+    if (index < v->size) {
+        if (v->DeleteVoidPtr != NULL) {
+            v->DeleteVoidPtr(v->data[index]);
+        }
+        if (index + 1 < v->size) {
+            size_t ind = index;
+            while (ind + 1 < v->size) {
+                v->data[ind] = v->data[ind + 1];
+                ind += 1;
+            }
+        }
+        v->size -= 1;
+    }
+    return;
+}
+
+VECTOR_TYPE get_at_vector(const Vector *v, size_t index) {
+    if (v == NULL || v->data == NULL) {
+        return (VECTOR_TYPE)0;
+    }
+    if (index < v->size) {
+        if (v->CopyVoidPtr != NULL) {
+            return v->CopyVoidPtr(v->data[index]);
+        } else {
+            return v->data[index];
+        }
+    }
+    return (VECTOR_TYPE)0;
+}
+
 void delete_vector(Vector *v) {
     if (v == NULL) {
         return;

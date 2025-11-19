@@ -16,12 +16,21 @@ int main() {
     push_back_vector(&v, 1);
     push_back_vector(&v, 2);
     push_back_vector(&v, 3);
+    printf("Вектор:\n");
     for (size_t i = 0; i < v.size; i++) {
-        printf("v[%zu] = %d\n", i, v.data[i]);
+        printf("%d ", get_at_vector(&v, i));
+    }
+    printf("\n");
+    printf("\ndelete_at_vector\n");
+    delete_at_vector(&v, 1);
+    for (size_t i = 0; i < v.size; i++) {
+        VECTOR_TYPE el = get_at_vector(&v, i);
+        printf("v[%zu] = %d\n", i, el);
     }
     printf("\nsize: %zu\ncapacity: %zu\n", v.size, v.capacity);
     erase_vector(&v);
     printf("\nerase_vector\n");
     printf("\nsize: %zu\ncapacity: %zu\n", v.size, v.capacity);
+    delete_vector(&v);
     return 0;
 }

@@ -65,6 +65,50 @@ int is_equal_vector(const Vector *v1, const Vector *v2) {
     return 1;
 }
 
+void copy_vector(Vector *dest, const Vector *src) {
+    if (dest == NULL || src == NULL) {
+        return;
+    }
+    erase_vector(dest);
+    if (src->capacity == 0) {
+        return;
+    }
+    dest->data = (VECTOR_TYPE *)malloc(src->capacity * sizeof(VECTOR_TYPE));
+    if (dest->data == NULL) {
+        dest->size = 0;
+        dest->capacity = 0;
+        return;
+    }
+    dest->capacity = src->capacity;
+    dest->size = src->size;
+    dest->CopyVoidPtr = src->CopyVoidPtr;
+    dest->DeleteVoidPtr = src->DeleteVoidPtr;
+    for (size_t i = 0; i < src->size; i++) {
+        if (src->CopyVoidPtr != NULL) {
+            dest->data[i] = src->CopyVoidPtr(src->data[i]);
+        } else {
+            dest->data[i] = src->data[i];
+        }
+    }
+}
+
+Vector *copy_vector_new(const Vector *src) {
+    if (src == NULL) {
+        return NULL;
+    }
+    Vector *v = (Vector *)malloc(sizeof(Vector));
+    if (v == NULL) {
+        return NULL;
+    }
+    v->data = NULL;
+    v->size = 0;
+    v->capacity = 0;
+    v->CopyVoidPtr = src->CopyVoidPtr;
+    v->DeleteVoidPtr = src->DeleteVoidPtr;
+    copy_vector(v, src);
+    return v;
+}
+
 void push_back_vector(Vector *v, VECTOR_TYPE value) {
     if (v == NULL) {
         return;

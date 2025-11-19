@@ -11,8 +11,17 @@ static void delete_int(VECTOR_TYPE v) {
     (void)v;
 }
 
-int main(void) {
-    Vector v = create_vector(4, copy_int, delete_int);
-    delete_vector(&v);
+int main() {
+    Vector v = create_vector(2, copy_int, delete_int);
+    push_back_vector(&v, 1);
+    push_back_vector(&v, 2);
+    push_back_vector(&v, 3);
+    for (size_t i = 0; i < v.size; i++) {
+        printf("v[%zu] = %d\n", i, v.data[i]);
+    }
+    printf("\nsize: %zu\ncapacity: %zu\n", v.size, v.capacity);
+    erase_vector(&v);
+    printf("\nerase_vector\n");
+    printf("\nsize: %zu\ncapacity: %zu\n", v.size, v.capacity);
     return 0;
 }

@@ -20,14 +20,58 @@ Vector create_vector(size_t initial_capacity, VECTOR_TYPE (*CopyFunc)(VECTOR_TYP
     return v;
 }
 
+void erase_vector(Vector *v) {
+    if (v == NULL) {
+        return;
+    }
+    if (v->data != NULL) {
+        for (size_t i = 0; i < v->size; i++) {
+            v->DeleteVoidPtr(v->data[i]);
+        }
+        free(v->data);
+        v->data = NULL;
+    }
+    v->size = 0;
+    v->capacity = 0;
+}
+
+void push_back_vector(Vector *v, VECTOR_TYPE value) {
+    if (v == NULL) {
+        return;
+    }
+    if (v->capacity == 0) {
+        size_t new_capacity = 1;
+        VECTOR_TYPE *new_data = (VECTOR_TYPE *)malloc(new_capacity * sizeof(VECTOR_TYPE));
+        if (new_data == NULL) {
+            return;
+        }
+        v->data = new_data;
+        v->capacity = new_capacity;
+    } else if (v->size == v->capacity) {
+        size_t new_capacity = v->capacity * 2;
+        VECTOR_TYPE *new_data = (VECTOR_TYPE *)realloc(v->data, new_capacity * sizeof(VECTOR_TYPE));
+        if (new_data == NULL) {
+            return;
+        }
+        v->data = new_data;
+        v->capacity = new_capacity;
+    }
+    size_t index = v->size;
+    if (v->CopyVoidPtr != NULL) {
+        v->data[index] = v->CopyVoidPtr(value);
+    } else {
+        v->data[index] = value;
+    }
+    v->size += 1;
+}
+
 void delete_vector(Vector *v) {
     if (v == NULL) {
         return;
     }
     if (v->data != NULL) {
         if (v->DeleteVoidPtr != NULL) {
-            size_t i;
-            for (i = 0; i < v->size; i += 1) {
+            for (size_t i = 0; i < v->size; i++) {
                 v->DeleteVoidPtr(v->data[i]);
             }
         }

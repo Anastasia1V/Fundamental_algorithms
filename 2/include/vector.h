@@ -4,6 +4,12 @@
 #include "type.h"
 #include <stddef.h>
 
+enum status {
+    SUCCESS,
+    INVALID_ARGS,
+    MEMORY_ERROR
+};
+
 typedef struct Vector {
     VECTOR_TYPE *data;
     size_t size;

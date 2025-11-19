@@ -1,5 +1,6 @@
 #include "vector.h"
 #include <stdlib.h>
+#include <math.h>
 
 Vector create_vector(size_t initial_capacity, VECTOR_TYPE (*CopyFunc)(VECTOR_TYPE), void (*DeleteFunc)(VECTOR_TYPE)) {
     Vector v;
@@ -58,9 +59,15 @@ int is_equal_vector(const Vector *v1, const Vector *v2) {
         } else {
             el2 = v2->data[i];
         }
+        #ifdef VECTOR_TYPE_IS_FLOAT
+        if (fabs(el1 - el2) > 1e-9) {
+            return 0;
+        }
+        #else
         if (el1 != el2) {
             return 0;
         }
+        #endif
     }
     return 1;
 }

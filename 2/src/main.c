@@ -1,5 +1,3 @@
-// #define VECTOR_TYPE int
-
 #include "type.h"
 #include "vector.h"
 #include <stdio.h>

@@ -1,6 +1,7 @@
 #include "vector.h"
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 Vector create_vector(size_t initial_capacity, VECTOR_TYPE (*CopyFunc)(VECTOR_TYPE), void (*DeleteFunc)(VECTOR_TYPE)) {
     Vector v;
@@ -61,6 +62,16 @@ int is_equal_vector(const Vector *v1, const Vector *v2) {
         }
         #ifdef VECTOR_TYPE_IS_FLOAT
         if (fabs(el1 - el2) > 1e-9) {
+            return 0;
+        }
+        #elif defined(VECTOR_TYPE_IS_CSTRING)
+        if (el1 == NULL && el2 == NULL) {
+            return 1;
+        }
+        if (el1 == NULL || el2 == NULL) {
+            return 0;
+        }
+        if (strcmp(el1, el2) != 0) {
             return 0;
         }
         #else

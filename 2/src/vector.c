@@ -35,6 +35,36 @@ void erase_vector(Vector *v) {
     v->capacity = 0;
 }
 
+int is_equal_vector(const Vector *v1, const Vector *v2) {
+    if (v1 == NULL && v2 == NULL) {
+        return 1;
+    }
+    if (v1 == NULL || v2 == NULL) {
+        return 0;
+    }
+    if (v1->size != v2->size) {
+        return 0;
+    }
+    for (size_t i = 0; i < v1->size; i++) {
+        VECTOR_TYPE el1;
+        VECTOR_TYPE el2;
+        if (v1->CopyVoidPtr != NULL) {
+            el1 = v1->CopyVoidPtr(v1->data[i]);
+        } else {
+            el1 = v1->data[i];
+        }
+        if (v2->CopyVoidPtr != NULL) {
+            el2 = v2->CopyVoidPtr(v2->data[i]);
+        } else {
+            el2 = v2->data[i];
+        }
+        if (el1 != el2) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 void push_back_vector(Vector *v, VECTOR_TYPE value) {
     if (v == NULL) {
         return;

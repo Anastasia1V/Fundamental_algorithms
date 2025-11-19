@@ -32,5 +32,20 @@ int main() {
     printf("\nerase_vector\n");
     printf("\nsize: %zu\ncapacity: %zu\n", v.size, v.capacity);
     delete_vector(&v);
+    printf("\nis_equal_vector\n");
+    Vector v1 = create_vector(2, copy_int, delete_int);
+    push_back_vector(&v1, 1);
+    push_back_vector(&v1, 2);
+    Vector v2 = create_vector(2, copy_int, delete_int);
+    push_back_vector(&v2, 1);
+    push_back_vector(&v2, 2);
+    Vector v3 = create_vector(2, copy_int, delete_int);
+    push_back_vector(&v3, 2);
+    push_back_vector(&v3, 3);
+    printf("v1 == v2: %d\n", is_equal_vector(&v1, &v2));
+    printf("v1 == v3: %d\n", is_equal_vector(&v1, &v3));
+    delete_vector(&v1);
+    delete_vector(&v2);
+    delete_vector(&v3);
     return 0;
 }

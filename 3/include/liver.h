@@ -7,7 +7,7 @@
 enum status {
     SUCCESS,
     INVALID_ARGS,
-    MEMORY_ERROR
+    FILE_ERROR
 };
 
 typedef struct Liver {
@@ -36,8 +36,6 @@ typedef struct LinkedList {
     size_t size;
 } LinkedList;
 
-size_t read_liver(const char *input, Liver *livers, size_t max_count);
-
 LinkedList *create_list(void);
 void erase_list(LinkedList *list);
 void delete_list(LinkedList *list);
@@ -56,6 +54,10 @@ void enqueue(LinkedList *queue, LIST_TYPE value);
 LIST_TYPE dequeue(LinkedList *queue);
 LIST_TYPE peek_queue(const LinkedList *queue);
 
+enum status read_liver(const char *input, Liver *livers, size_t max_count, size_t *count_livers);
 LinkedList *make_linked_list(const Liver *livers, size_t count);
+void print_liver(const Liver *liver);
+void print_list(const LinkedList *list);
+enum status find_liver(const LinkedList *list);
 
 #endif

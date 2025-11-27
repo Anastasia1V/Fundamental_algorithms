@@ -1017,3 +1017,57 @@ enum status add_liver(LinkedList *list) {
     printf("Житель с id = %u добавлен.\n", id);
     return SUCCESS;
 }
+
+enum status info_to_file(const LinkedList *list) {
+    if (list == NULL) {
+        return INVALID_ARGS;
+    }
+    char path[256];
+    printf("Введите путь к файлу (например 3/info.txt): ");
+    if (fgets(path, sizeof(path), stdin) == NULL) {
+        return INVALID_ARGS;
+    }
+    path[strcspn(path, "\r\n")] = '\0';
+    if (path[0] == '\0') {
+        return INVALID_ARGS;
+    }
+    FILE *file = fopen(path, "w");
+    if (file == NULL) {
+        perror("fopen");
+        return FILE_ERROR;
+    }
+    const Node *node = list->head;
+    while (node != NULL) {
+        const Liver *liver = &node->data;
+        if (liver->second_name[0] != '\0') {
+            if (fprintf(file, "%u %s %s %s %d.%d.%d %c %.2f\n",
+                        liver->id,
+                        liver->last_name,
+                        liver->first_name,
+                        liver->second_name,
+                        liver->day, liver->month, liver->year,
+                        liver->gender,
+                        liver->earnings) < 0) {
+                fclose(file);
+                return FILE_ERROR;
+            }
+        } else {
+            if (fprintf(file, "%u %s %s %d.%d.%d %c %.2f\n",
+                        liver->id,
+                        liver->last_name,
+                        liver->first_name,
+                        liver->day, liver->month, liver->year,
+                        liver->gender,
+                        liver->earnings) < 0) {
+                fclose(file);
+                return FILE_ERROR;
+            }
+        }
+        node = node->next;
+    }
+    if (fclose(file) != 0) {
+        return FILE_ERROR;
+    }
+    printf("Данные успешно записаны в %s\n", path);
+    return SUCCESS;
+}

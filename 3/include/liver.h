@@ -62,5 +62,6 @@ enum status find_liver(const LinkedList *list);
 enum status edit_liver(LinkedList *list);
 enum status delete_liver(LinkedList *list);
 enum status add_liver(LinkedList *list);
+enum status info_to_file(const LinkedList *list);
 
 #endif

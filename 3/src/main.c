@@ -47,6 +47,8 @@ int main(void) {
             delete_liver(list);
         } else if (v == 4) {
             add_liver(list);
+        } else if (v == 5) {
+            info_to_file(list);
         } else {
             printf("Некорректная команда.\n");
         }

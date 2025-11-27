@@ -19,7 +19,7 @@ int main(void) {
     size_t count = 0;
     enum status st = read_liver("3/liver.txt", livers, 256, &count);
     if (st != SUCCESS) {
-        fprintf(stderr, "Ошибка при чтении файла: %d\n", st);
+        fprintf(stderr, "Ошибка при чтении файла.\n");
         return 1;
     }
     LinkedList *list = make_linked_list(livers, count);
@@ -27,8 +27,17 @@ int main(void) {
         fprintf(stderr, "Ошибка создания списка.\n");
         return 1;
     }
+    Undo *undo = create_undo_list();
+    if (undo == NULL) {
+        fprintf(stderr, "Ошибка создания Undo.\n");
+        delete_list(list);
+        return 1;
+    }
+    if (add_to_undo(undo, list) != SUCCESS) {
+        fprintf(stderr, "Не удалось сохранить начальное состояние для Undo.\n");
+    }
     help();
-     while (1) {
+    while (1) {
         printf("\n");
         printf("Введите команду: ");
         char input[256];
@@ -42,13 +51,44 @@ int main(void) {
         } else if (v == 1) {
             find_liver(list);
         } else if (v == 2) {
-            edit_liver(list);
+            enum status st = edit_liver(list);
+            if (st == SUCCESS) {
+                if (add_to_undo(undo, list) != SUCCESS) {
+                    fprintf(stderr, "2. Не удалось сохранить состояние Undo.\n");
+                }
+            } else {
+                printf("edit не выполнено.\n");
+            }
         } else if (v == 3) {
-            delete_liver(list);
+            enum status st = delete_liver(list);
+            if (st == SUCCESS) {
+                if (add_to_undo(undo, list) != SUCCESS) {
+                    fprintf(stderr, "3. Не удалось сохранить состояние после удаления.\n");
+                }
+            } else {
+                printf("delete не выполнено.\n");
+            }
         } else if (v == 4) {
-            add_liver(list);
+            enum status st = add_liver(list);
+            if (st == SUCCESS) {
+                if (add_to_undo(undo, list) != SUCCESS) {
+                    fprintf(stderr, "4. Не удалось сохранить состояние после добавления.\n");
+                }
+            } else {
+                printf("add не выполнено.\n");
+            }
         } else if (v == 5) {
-            info_to_file(list);
+            enum status st = info_to_file(list);
+            if (st != SUCCESS) {
+                printf("Ошибка при выгрузке данных в файл.\n");
+            }
+        } else if (v == 6) {
+            enum status st = undo_half(undo, &list);
+            if (st != SUCCESS) {
+                printf("Undo не выполнено.\n");
+            } else {
+                printf("Undo выполнено.\n");
+            }
         } else {
             printf("Некорректная команда.\n");
         }

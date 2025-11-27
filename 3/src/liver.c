@@ -1071,3 +1071,139 @@ enum status info_to_file(const LinkedList *list) {
     printf("Данные успешно записаны в %s\n", path);
     return SUCCESS;
 }
+
+static LinkedList *copy_for_undo(const LinkedList *list) {
+    if (list == NULL) {
+        return NULL;
+    }
+    LinkedList *new_list = create_list();
+    if (new_list == NULL) {
+        return NULL;
+    }
+    const Node *node = list->head;
+    while (node != NULL) {
+        push_back_list(new_list, node->data);
+        node = node->next;
+    }
+    return new_list;
+}
+
+Undo *create_undo_list(void) {
+    Undo *undo = (Undo*)malloc(sizeof(Undo));
+    if (undo == NULL) {
+        return NULL;
+    }
+    undo->capacity = 8;
+    undo->count = 0;
+    undo->list = (LinkedList**)malloc(undo->capacity * sizeof(LinkedList*));
+    if (undo->list == NULL) {
+        free(undo);
+        return NULL;
+    }
+    for (size_t i = 0; i < undo->capacity; i++) {
+        undo->list[i] = NULL;
+    }
+    return undo;
+}
+
+void free_undo_list(Undo *undo) {
+    if (undo == NULL) {
+        return;
+    }
+    for (size_t i = 0; i < undo->count; i++) {
+        if (undo->list[i] != NULL) {
+            delete_list(undo->list[i]);
+            undo->list[i] = NULL;
+        }
+    }
+    free(undo->list);
+    undo->list = NULL;
+    undo->count = 0;
+    undo->capacity = 0;
+    free(undo);
+}
+
+enum status add_to_undo(Undo *undo, const LinkedList *list) {
+    if (undo == NULL || list == NULL) {
+        return INVALID_ARGS;
+    }
+    LinkedList *copy = copy_for_undo(list);
+    if (copy == NULL) {
+        return FILE_ERROR;
+    }
+    if (undo->count + 1 > undo->capacity) {
+        size_t newcap = undo->capacity * 2;
+        LinkedList **newlist = (LinkedList**)realloc(undo->list, newcap * sizeof(LinkedList*));
+        if (newlist == NULL) {
+            delete_list(copy);
+            return FILE_ERROR;
+        }
+        for (size_t i = undo->capacity; i < newcap; i++) {
+            newlist[i] = NULL;
+        }
+        undo->list = newlist;
+        undo->capacity = newcap;
+    }
+    undo->list[undo->count] = copy;
+    undo->count += 1;
+    return SUCCESS;
+}
+
+enum status undo_half(Undo *undo, LinkedList **list) {
+    if (undo == NULL || list == NULL) {
+        return INVALID_ARGS;
+    }
+    if (undo->count == 0) {
+        printf("Нет модификаций.\n");
+        return INVALID_ARGS;
+    }
+    if (undo->count <= 1) {
+        printf("Нужно минимум 2 модификации для отмены.\n");
+        return INVALID_ARGS;
+    }
+    size_t N = undo->count - 1;
+    size_t to_undo = N / 2;
+    if (to_undo == 0) {
+        printf("Нужно минимум 2 модификации для отмены.\n");
+        return INVALID_ARGS;
+    }
+    size_t new_index = undo->count - 1 - to_undo;
+    if (new_index >= undo->count) {
+        return INVALID_ARGS;
+    }
+    LinkedList *saved = undo->list[new_index];
+    if (saved == NULL) {
+        return INVALID_ARGS;
+    }
+    LinkedList *restored = copy_for_undo(saved);
+    if (restored == NULL) {
+        return FILE_ERROR;
+    }
+    if (*list != NULL) {
+        delete_list(*list);
+    }
+    *list = restored;
+    for (size_t i = 0; i < undo->count; i++) {
+        if (undo->list[i] != NULL) {
+            delete_list(undo->list[i]);
+            undo->list[i] = NULL;
+        }
+    }
+    undo->count = 0;
+    LinkedList *first_copy = copy_for_undo(*list);
+    if (first_copy == NULL) {
+        return FILE_ERROR;
+    }
+    if (undo->capacity == 0) {
+        undo->capacity = 1;
+        undo->list = (LinkedList**)malloc(undo->capacity * sizeof(LinkedList*));
+        if (undo->list == NULL) {
+            delete_list(first_copy);
+            return FILE_ERROR;
+        }
+    }
+    undo->list[0] = first_copy;
+    undo->count = 1;
+    printf("Отмена выполнена: отменены последние %zu модификаций (N = %zu, N/2 = %zu).\n", to_undo, N, to_undo);
+    return SUCCESS;
+}

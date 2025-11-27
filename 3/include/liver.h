@@ -36,6 +36,12 @@ typedef struct LinkedList {
     size_t size;
 } LinkedList;
 
+typedef struct Undo {
+    LinkedList **list;
+    size_t count;
+    size_t capacity;
+} Undo;
+
 LinkedList *create_list(void);
 void erase_list(LinkedList *list);
 void delete_list(LinkedList *list);
@@ -63,5 +69,9 @@ enum status edit_liver(LinkedList *list);
 enum status delete_liver(LinkedList *list);
 enum status add_liver(LinkedList *list);
 enum status info_to_file(const LinkedList *list);
+Undo *create_undo_list(void);
+void free_undo_list(Undo *undo);
+enum status add_to_undo(Undo *undo, const LinkedList *list);
+enum status undo_half(Undo *undo, LinkedList **list);
 
 #endif

@@ -41,8 +41,14 @@ int main(void) {
             break;
         } else if (v == 1) {
             find_liver(list);
+        } else if (v == 2) {
+            edit_liver(list);
+        } else if (v == 3) {
+            delete_liver(list);
+        } else if (v == 4) {
+            add_liver(list);
         } else {
-            printf("Неизвестная команда.\n");
+            printf("Некорректная команда.\n");
         }
     }
     delete_list(list);

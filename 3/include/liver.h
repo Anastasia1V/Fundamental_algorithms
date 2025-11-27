@@ -59,5 +59,8 @@ LinkedList *make_linked_list(const Liver *livers, size_t count);
 void print_liver(const Liver *liver);
 void print_list(const LinkedList *list);
 enum status find_liver(const LinkedList *list);
+enum status edit_liver(LinkedList *list);
+enum status delete_liver(LinkedList *list);
+enum status add_liver(LinkedList *list);
 
 #endif

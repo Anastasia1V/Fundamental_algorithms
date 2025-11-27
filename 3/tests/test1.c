@@ -4,7 +4,7 @@
 #include <string.h>
 
 int main(void) {
-     Liver livers[256];
+    Liver livers[256];
     size_t count = 0;
     enum status st = read_liver("3/liver.txt", livers, 256, &count);
     if (st != SUCCESS) {

@@ -316,6 +316,65 @@ enum status add_office(MailSystem *sys, unsigned int id, size_t capacity,
     return SUCCESS;
 }
 
+static enum status send_mail_to_neighbor(MailSystem *sys, unsigned int mail_id, unsigned int current_office) {
+    if (sys == NULL) {
+        return INVALID_ARGS;
+    }
+    Mail *m = get_mail_by_id(sys, mail_id);
+    if (m == NULL) {
+        return NOT_FOUND;
+    }
+    Office *current = find_office_by_id(sys, current_office);
+    if (current == NULL) {
+        return NOT_FOUND;
+    }
+    Office *dst = find_office_by_id(sys, m->dst_office);
+    if (dst == NULL) {
+        return NOT_FOUND;
+    }
+    if (current_office == m->dst_office) {
+        m->state = MAIL_DELIVERED;
+        if (sys->log != NULL) {
+            fprintf(sys->log, "MAIL_DELIVERED: id = %u at office %u\n", m->id, dst->id);
+            fflush(sys->log);
+        }
+        for (size_t i = 0; i < sys->mails_count; i++) {
+            if (sys->mails[i]->id == m->id) {
+                free(sys->mails[i]);
+                for (size_t j = i; j < sys->mails_count - 1; j++) {
+                    sys->mails[j] = sys->mails[j + 1];
+                }
+                sys->mails_count = sys->mails_count - 1;
+                break;
+            }
+        }
+        return SUCCESS;
+    }
+    for (size_t i = 0; i < current->neighbors_count; i++) {
+        unsigned int neighbor_id = current->neighbors[i];
+        Office *neighbor = find_office_by_id(sys, neighbor_id);
+        if (neighbor == NULL) {
+            continue;
+        }
+        if (neighbor->mailbox.size < neighbor->capacity) {
+            int key = encode_heap_key(m->priority, m->id);
+            push_heap(&neighbor->mailbox, key);
+            if (sys->log != NULL) {
+                fprintf(sys->log, "MAIL_MOVED: id = %u from office %u to office %u\n",
+                        m->id, current_office, neighbor_id);
+                fflush(sys->log);
+            }
+            return SUCCESS;
+        }
+    }
+    m->state = MAIL_UNDELIVERED;
+    if (sys->log != NULL) {
+        fprintf(sys->log, "MAIL_UNDELIVERED: id = %u at office %u\n", m->id, current_office);
+        fflush(sys->log);
+    }
+    return SUCCESS;
+}
+
 enum status delete_office(MailSystem *sys, unsigned int id) {
     if (!sys) {
         return INVALID_ARGS;
@@ -333,6 +392,33 @@ enum status delete_office(MailSystem *sys, unsigned int id) {
     if (!found) {
         pthread_mutex_unlock(&sys->lock);
         return NOT_FOUND;
+    }
+    Heap *hb = &sys->offices[index].mailbox;
+    while (hb->size > 0) {
+        int key = pop_heap(hb);
+        if (key == INT_MIN) break;
+        unsigned int mail_id = decode_mail_id_from_key(key);
+        Mail *m = get_mail_by_id(sys, mail_id);
+        if (m == NULL) continue;
+        if (m->dst_office == id) {
+            m->state = MAIL_UNDELIVERED;
+            if (sys->log) {
+                fprintf(sys->log, "DELETE_OFFICE_MARK_UNDELIVERED: mail %u due to office %u deletion\n", m->id, id);
+                fflush(sys->log);
+            }
+            for (size_t mi = 0; mi < sys->mails_count; mi++) {
+                if (sys->mails[mi]->id == mail_id) {
+                    free(sys->mails[mi]);
+                    for (size_t mj = mi; mj + 1 < sys->mails_count; mj++) {
+                        sys->mails[mj] = sys->mails[mj + 1];
+                    }
+                    sys->mails_count--;
+                    break;
+                }
+            }
+        } else {
+            send_mail_to_neighbor(sys, mail_id, id);
+        }
     }
     delete_heap(&sys->offices[index].mailbox);
     if (sys->offices[index].neighbors) {
@@ -388,18 +474,21 @@ int office_exists(const MailSystem *sys, unsigned int id) {
 }
 
 int encode_heap_key(int priority, unsigned int mail_id) {
-    int number = (priority << 16) | (mail_id & 0xFFFF);
-    return number;
+    unsigned int pid = (unsigned int)priority;
+    unsigned int inv = UINT_MAX - pid;
+    unsigned int keyu = (inv << 16) | (mail_id & 0xFFFFu);
+    return (int)keyu;
 }
 
 unsigned int decode_mail_id_from_key(int key) {
-    int id = key & 0xFFFF;
-    return id;
+    return (unsigned int)key & 0xFFFFu;
 }
 
 int decode_priority_from_key(int key) {
-    int pr = (key >> 16) & 0xFFFF;
-    return pr;
+    unsigned int keyu = (unsigned int) key;
+    unsigned int inv = (keyu >> 16) & 0xFFFFu;
+    unsigned int pid = UINT_MAX - inv;
+    return (int)pid;
 }
 
 static unsigned int generate_mail_id() {
@@ -547,65 +636,6 @@ enum status mails_to_file(MailSystem *sys, const char *out_path) {
     }
     fclose(file);
     pthread_mutex_unlock(&sys->lock);
-    return SUCCESS;
-}
-
-static enum status send_mail_to_neighbor(MailSystem *sys, unsigned int mail_id, unsigned int current_office) {
-    if (sys == NULL) {
-        return INVALID_ARGS;
-    }
-    Mail *m = get_mail_by_id(sys, mail_id);
-    if (m == NULL) {
-        return NOT_FOUND;
-    }
-    Office *current = find_office_by_id(sys, current_office);
-    if (current == NULL) {
-        return NOT_FOUND;
-    }
-    Office *dst = find_office_by_id(sys, m->dst_office);
-    if (dst == NULL) {
-        return NOT_FOUND;
-    }
-    if (current_office == m->dst_office) {
-        m->state = MAIL_DELIVERED;
-        if (sys->log != NULL) {
-            fprintf(sys->log, "MAIL_DELIVERED: id = %u at office %u\n", m->id, dst->id);
-            fflush(sys->log);
-        }
-        for (size_t i = 0; i < sys->mails_count; i++) {
-            if (sys->mails[i]->id == m->id) {
-                free(sys->mails[i]);
-                for (size_t j = i; j < sys->mails_count - 1; j++) {
-                    sys->mails[j] = sys->mails[j + 1];
-                }
-                sys->mails_count = sys->mails_count - 1;
-                break;
-            }
-        }
-        return SUCCESS;
-    }
-    for (size_t i = 0; i < current->neighbors_count; i++) {
-        unsigned int neighbor_id = current->neighbors[i];
-        Office *neighbor = find_office_by_id(sys, neighbor_id);
-        if (neighbor == NULL) {
-            continue;
-        }
-        if (neighbor->mailbox.size < neighbor->capacity) {
-            int key = encode_heap_key(m->priority, m->id);
-            push_heap(&neighbor->mailbox, key);
-            if (sys->log != NULL) {
-                fprintf(sys->log, "MAIL_MOVED: id = %u from office %u to office %u\n",
-                        m->id, current_office, neighbor_id);
-                fflush(sys->log);
-            }
-            return SUCCESS;
-        }
-    }
-    m->state = MAIL_UNDELIVERED;
-    if (sys->log != NULL) {
-        fprintf(sys->log, "MAIL_UNDELIVERED: id = %u at office %u\n", m->id, current_office);
-        fflush(sys->log);
-    }
     return SUCCESS;
 }
 

@@ -17,49 +17,74 @@ void help(void) {
     printf("6. Записать письма в файл\n");
 }
 
-static int parse_int_from_fgets(const char *prompt, int *out) {
-    char buf[256];
+static int parse_int(const char *prompt, int *out) {
+    char str[256];
     char *endptr;
-    long val;
+    long value;
     printf("%s", prompt);
-    if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
-    errno = 0;
-    val = strtol(buf, &endptr, 10);
-    if (endptr == buf) return 0;
-    while (*endptr == ' ' || *endptr == '\t') endptr++;
-    if (*endptr != '\n' && *endptr != '\0') return 0;
-    if ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) return 0;
-    if (val < INT_MIN || val > INT_MAX) return 0;
-    *out = (int)val;
+    if (fgets(str, sizeof(str), stdin) == NULL) {
+        return 0;
+    }
+    value = strtol(str, &endptr, 10);
+    if (endptr == str) {
+        return 0;
+    }
+    while (*endptr == ' ' || *endptr == '\t') {
+        endptr += 1;
+    }
+    if (*endptr != '\n' && *endptr != '\0') {
+        return 0;
+    }
+    if ((value == LONG_MIN || value == LONG_MAX) && errno == ERANGE) {
+        return 0;
+    }
+    if (value < INT_MIN || value > INT_MAX) {
+        return 0;
+    }
+    *out = (int)value;
     return 1;
 }
 
-static int parse_uint_from_fgets(const char *prompt, unsigned int *out) {
-    char buf[256];
+static int parse_uint(const char *prompt, unsigned int *out) {
+    char str[256];
     char *endptr;
-    unsigned long val;
+    unsigned long value;
     printf("%s", prompt);
-    if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
-    errno = 0;
-    val = strtoul(buf, &endptr, 10);
-    if (endptr == buf) return 0;
-    while (*endptr == ' ' || *endptr == '\t') endptr++;
-    if (*endptr != '\n' && *endptr != '\0') return 0;
-    if (val > UINT_MAX) return 0;
-    *out = (unsigned int)val;
+    if (fgets(str, sizeof(str), stdin) == NULL) {
+        return 0;
+    }
+    value = strtoul(str, &endptr, 10);
+    if (endptr == str) {
+        return 0;
+    }
+    while (*endptr == ' ' || *endptr == '\t') {
+        endptr += 1;
+    }
+    if (*endptr != '\n' && *endptr != '\0') {
+        return 0;
+    }
+    if (value > UINT_MAX) {
+        return 0;
+    }
+    *out = (unsigned int)value;
     return 1;
 }
 
-static int parse_string_from_fgets(const char *prompt, char *out, size_t out_size) {
-    char buf[512];
-    printf("%s", prompt);
-    if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
-    size_t len = strlen(buf);
-    if (len > 0 && buf[len-1] == '\n') buf[len-1] = '\0';
-    // copy at most out_size-1 chars
-    if (out_size == 0) return 0;
-    buf[out_size-1] = '\0';
-    strncpy(out, buf, out_size);
+static int parse_string(const char *text, char *out, size_t out_size) {
+    char str[512];
+    printf("%s", text);
+    if (fgets(str, sizeof(str), stdin) == NULL) {
+        return 0;
+    }
+    size_t len = strlen(str);
+    if (len > 0 && str[len-1] == '\n') {
+        str[len-1] = '\0';
+    }
+    if (out_size == 0) {
+        return 0;
+    }
+    str[out_size-1] = '\0';
+    strncpy(out, str, out_size);
     return 1;
 }
 
@@ -106,15 +131,15 @@ int main(int argc, char *argv[]) {
             unsigned int id;
             int capacity;
             int n;
-            if (!parse_uint_from_fgets("ID нового офиса: ", &id)) {
+            if (!parse_uint("ID нового офиса: ", &id)) {
                 printf("Неверный ввод ID.\n");
                 continue;
             }
-            if (!parse_int_from_fgets("Вместимость: ", &capacity)) {
+            if (!parse_int("Вместимость: ", &capacity)) {
                 printf("Неверный ввод вместимости.\n");
                 continue;
             }
-            if (!parse_int_from_fgets("Количество соседей: ", &n)) {
+            if (!parse_int("Количество соседей: ", &n)) {
                 printf("Неверный ввод количества соседей.\n");
                 continue;
             }
@@ -133,7 +158,7 @@ int main(int argc, char *argv[]) {
                 for (int i = 0; i < n; i++) {
                     char prompt[64];
                     snprintf(prompt, sizeof(prompt), "ID соседа %d: ", i + 1);
-                    if (!parse_uint_from_fgets(prompt, &neighbors[i])) {
+                    if (!parse_uint(prompt, &neighbors[i])) {
                         neighbors[i] = 0;
                     }
                 }
@@ -151,7 +176,7 @@ int main(int argc, char *argv[]) {
             if (neighbors) free(neighbors);
         } else if (v == 2) {
             unsigned int id;
-            if (!parse_uint_from_fgets("ID офиса для удаления: ", &id)) {
+            if (!parse_uint("ID офиса для удаления: ", &id)) {
                 printf("Неверный ввод.\n");
                 continue;
             }
@@ -166,23 +191,23 @@ int main(int argc, char *argv[]) {
             int priority;
             unsigned int src;
             unsigned int dst;
-            if (!parse_string_from_fgets("Тип письма: ", type, sizeof(type))) {
+            if (!parse_string("Тип письма: ", type, sizeof(type))) {
                 printf("Неверный ввод типа.\n");
                 continue;
             }
-            if (!parse_int_from_fgets("Приоритет (целое): ", &priority)) {
+            if (!parse_int("Приоритет (целое): ", &priority)) {
                 printf("Неверный ввод приоритета.\n");
                 continue;
             }
-            if (!parse_uint_from_fgets("От какого офиса (ID): ", &src)) {
+            if (!parse_uint("От какого офиса (ID): ", &src)) {
                 printf("Неверный ввод src.\n");
                 continue;
             }
-            if (!parse_uint_from_fgets("До какого офиса (ID): ", &dst)) {
+            if (!parse_uint("До какого офиса (ID): ", &dst)) {
                 printf("Неверный ввод dst.\n");
                 continue;
             }
-            if (!parse_string_from_fgets("Данные письма: ", data, sizeof(data))) {
+            if (!parse_string("Данные письма: ", data, sizeof(data))) {
                 printf("Неверный ввод данных.\n");
                 continue;
             }
@@ -194,7 +219,7 @@ int main(int argc, char *argv[]) {
             }
         } else if (v == 4) {
             unsigned int id;
-            if (!parse_uint_from_fgets("ID письма для пометки недоставленным: ", &id)) {
+            if (!parse_uint("ID письма для пометки недоставленным: ", &id)) {
                 printf("Неверный ввод.\n");
                 continue;
             }
@@ -205,7 +230,7 @@ int main(int argc, char *argv[]) {
             }
         } else if (v == 5) {
             unsigned int id;
-            if (!parse_uint_from_fgets("ID письма для доставки вручную: ", &id)) {
+            if (!parse_uint("ID письма для доставки вручную: ", &id)) {
                 printf("Неверный ввод.\n");
                 continue;
             }
@@ -216,7 +241,7 @@ int main(int argc, char *argv[]) {
             }
         } else if (v == 6) {
             char path[256];
-            if (!parse_string_from_fgets("Имя файла для сохранения писем: ", path, sizeof(path))) {
+            if (!parse_string("Имя файла для сохранения писем: ", path, sizeof(path))) {
                 printf("Неверный ввод.\n");
                 continue;
             }

@@ -86,7 +86,7 @@ static void spaces(char *s) {
         s[0] = '\0';
         return;
     }
-    size_t length = right - left;
+    size_t length = (size_t)(right - left);
     memmove(s, left, length);
     s[length] = '\0';
 }
@@ -257,6 +257,10 @@ enum status solve(const char *str, const Variables *vars, int *ans) {
 static char *find_next_variable_start(char *s, char *end) {
     char *c = s;
     while (c < end && *c != '\0') {
+        if (isspace((unsigned char)*c)) {
+            c += 1;
+            continue;
+        }
         if (isupper((unsigned char)*c)) {
             char *next = c + 1;
             while (next < end && isspace((unsigned char)*next)) {
@@ -266,13 +270,44 @@ static char *find_next_variable_start(char *s, char *end) {
                 return c;
             }
         }
+        if ((size_t)(end - c) >= 5 && strncmp(c, "print", 5) == 0) {
+            char *p = c + 5;
+            while (p < end && isspace((unsigned char)*p)) {
+                p += 1;
+            }
+            if (p < end && *p == '(') {
+                return c;
+            }
+        }
         c += 1;
     }
     return NULL;
 }
 
-enum status take_command(const char *command, Variables *vars, FILE *file, size_t n) {
-    if (!command || !vars) {
+static void current_variables(const Variables *vars, char *out, size_t out_size) {
+    if (!vars || !out || out_size == 0) {
+        return;
+    }
+    out[0] = '\0';
+    int v = 1;
+    for (int index = 0; index < 26; index++) {
+        if (vars->initialized[index]) {
+            char str[64];
+            int written = snprintf(str, sizeof(str), "%c=%d", 'A' + index, vars->values[index]);
+            if (written < 0) {
+                continue;
+            }
+            if (!v) {
+                strncat(out, ", ", out_size - strlen(out) - 1);
+            }
+            strncat(out, str, out_size - strlen(out) - 1);
+            v = 0;
+        }
+    }
+}
+
+enum status take_command(const char *command, Variables *vars, FILE *file, size_t *index, size_t n) {
+    if (!command || !vars || !index) {
         return INVALID_ARGS;
     }
     char copy_str[512];
@@ -287,6 +322,70 @@ enum status take_command(const char *command, Variables *vars, FILE *file, size_
         }
         if (*c == '\0') {
             break;
+        }
+        if (strncmp(c, "print", 5) == 0) {
+            char *p = c + 5;
+            while (*p && isspace((unsigned char)*p)) {
+                p += 1;
+            }
+            if (*p != '(') {
+                if (file) {
+                    fprintf(file, "Ошибка на линии %zu: %d\n", n, SYNTAX_ERROR);
+                } else {
+                    printf("Ошибка на линии %zu: %d\n", n, SYNTAX_ERROR);
+                }
+                return SYNTAX_ERROR;
+            }
+            p += 1;
+            char *close = strchr(p, ')');
+            if (!close) {
+                if (file) {
+                    fprintf(file, "Ошибка на линии %zu: %d\n", n, SYNTAX_ERROR);
+                } else {
+                    printf("Ошибка на линии %zu: %d\n", n, SYNTAX_ERROR);
+                }
+                return SYNTAX_ERROR;
+            }
+            size_t length = (size_t)(close - p);
+            if (length >= 256) {
+                if (file) {
+                    fprintf(file, "Ошибка на линии %zu: %d\n", n, SYNTAX_ERROR);
+                } else {
+                    printf("Ошибка на линии %zu: %d\n", n, SYNTAX_ERROR);
+                }
+                return SYNTAX_ERROR;
+            }
+            char copy_str[256];
+            strncpy(copy_str, p, length);
+            copy_str[length] = '\0';
+            spaces(copy_str);
+            int value = 0;
+            enum status st = solve(copy_str, vars, &value);
+            if (st != SUCCESS) {
+                if (file) {
+                    fprintf(file, "Ошибка на линии %zu: %d\n", n, st);
+                } else {
+                    printf("Ошибка на линии %zu: %d\n", n, st);
+                }
+                return st;
+            }
+            printf("%d\n", value);
+            char all_variables[1024];
+            current_variables(vars, all_variables, sizeof(all_variables));
+            char operations[128];
+            int chars_written = snprintf(operations, sizeof(operations), "Print %s", copy_str);
+            if (chars_written < 0) {
+                strncpy(operations, "Print", sizeof(operations) - 1);
+                operations[sizeof(operations) - 1] = '\0';
+            }
+            if (file) {
+                fprintf(file, "[%zu] %s | %s | %s\n", *index, c, all_variables, operations);
+            } else {
+                printf("[%zu] %s | %s | %s\n", *index, c, all_variables, operations);
+            }
+            *index += 1;
+            c = close + 1;
+            continue;
         }
         if (!isupper((unsigned char)*c)) {
             char *next_start = find_next_variable_start(c, end_ptr);
@@ -336,11 +435,19 @@ enum status take_command(const char *command, Variables *vars, FILE *file, size_
             }
             return st;
         }
-        int index = variable_char - 'A';
-        vars->values[index] = value;
-        vars->initialized[index] = 1;
-        char line[512];
-        int written = snprintf(line, sizeof(line), "%c = %s", variable_char, str);
+        int variable_index = variable_char - 'A';
+        vars->values[variable_index] = value;
+        vars->initialized[variable_index] = 1;
+        char operations[64];
+        if (strpbrk(str, "+-*/^") != NULL) {
+            strncpy(operations, "Arithmetic operation", sizeof(operations) - 1);
+            operations[sizeof(operations) - 1] = '\0';
+        } else {
+            strncpy(operations, "Assignment", sizeof(operations) - 1);
+            operations[sizeof(operations) - 1] = '\0';
+        }
+        char for_log[320];
+        int written = snprintf(for_log, sizeof(for_log), "%c = %s", variable_char, str);
         if (written < 0) {
             if (file) {
                 fprintf(file, "Ошибка на линии %zu: %d\n", n, SYNTAX_ERROR);
@@ -349,13 +456,14 @@ enum status take_command(const char *command, Variables *vars, FILE *file, size_
             }
             return SYNTAX_ERROR;
         }
+        char all_variables[1024];
+        current_variables(vars, all_variables, sizeof(all_variables));
         if (file) {
-            fprintf(file, "Строка %zu: %s\n", n, line);
-            fprintf(file, "Результат: %d\n\n", value);
+            fprintf(file, "[%zu] %s | %s | %s\n", *index, for_log, all_variables, operations);
         } else {
-            printf("Строка %zu: %s\n", n, line);
-            printf("Результат: %d\n\n", value);
+            printf("[%zu] %s | %s | %s\n", *index, for_log, all_variables, operations);
         }
+        *index += 1;
         if (next_command != NULL) {
             c = next_command;
         } else {
@@ -384,13 +492,14 @@ enum status read_file(const char *input, const char *output) {
     Variables vars = {0};
     char str[512];
     size_t n = 1;
+    size_t index = 1;
     while (fgets(str, sizeof(str), in)) {
         size_t length = strlen(str);
         if (length > 0 && str[length - 1] == '\n') {
             str[length - 1] = '\0';
             length -= 1;
         }
-        enum status st = take_command(str, &vars, out, n);
+        enum status st = take_command(str, &vars, out, &index, n);
         if (st != SUCCESS) {
             if (out) {
                 fprintf(out, "Ошибка на линии %zu: %d\n", n, st);

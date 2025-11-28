@@ -1,9 +1,12 @@
 A = 2
 B = 3
+C = A + B * 2 D = C ^ B print(D) 
 D = B - A
 E = A * B
 F = B / A
-G = 2 ^ 5
+G = 2 ^ 5 print(E)
 H = B + D * E
-C = A + B * 2 D = C ^ B
-K = 2 + 3 * 4
+K = 2 + 3 * 4 print(D)
+print(A) A = 2 print(A)
+print(B)
+print(D) print(H) A = A + A

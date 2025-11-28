@@ -1,30 +1,20 @@
-Строка 1: A = 2
-Результат: 2
-
-Строка 2: B = 3
-Результат: 3
-
-Строка 3: D = B - A
-Результат: 1
-
-Строка 4: E = A * B
-Результат: 6
-
-Строка 5: F = B / A
-Результат: 1
-
-Строка 6: G = 2 ^ 5
-Результат: 32
-
-Строка 7: H = B + D * E
-Результат: 9
-
-Строка 8: C = A + B * 2
-Результат: 8
-
-Строка 8: D = C ^ B
-Результат: 512
-
-Строка 9: K = 2 + 3 * 4
-Результат: 14
-
+[1] A = 2 | A=2 | Assignment
+[2] B = 3 | A=2, B=3 | Assignment
+[3] C = A + B * 2 | A=2, B=3, C=8 | Arithmetic operation
+[4] D = C ^ B | A=2, B=3, C=8, D=512 | Arithmetic operation
+[5] print(D) | A=2, B=3, C=8, D=512 | Print D
+[6] D = B - A | A=2, B=3, C=8, D=1 | Arithmetic operation
+[7] E = A * B | A=2, B=3, C=8, D=1, E=6 | Arithmetic operation
+[8] F = B / A | A=2, B=3, C=8, D=1, E=6, F=1 | Arithmetic operation
+[9] G = 2 ^ 5 | A=2, B=3, C=8, D=1, E=6, F=1, G=32 | Arithmetic operation
+[10] print(E) | A=2, B=3, C=8, D=1, E=6, F=1, G=32 | Print E
+[11] H = B + D * E | A=2, B=3, C=8, D=1, E=6, F=1, G=32, H=9 | Arithmetic operation
+[12] K = 2 + 3 * 4 | A=2, B=3, C=8, D=1, E=6, F=1, G=32, H=9, K=14 | Arithmetic operation
+[13] print(D) | A=2, B=3, C=8, D=1, E=6, F=1, G=32, H=9, K=14 | Print D
+[14] print(A) A = 2 print(A) | A=2, B=3, C=8, D=1, E=6, F=1, G=32, H=9, K=14 | Print A
+[15] A = 2 | A=2, B=3, C=8, D=1, E=6, F=1, G=32, H=9, K=14 | Assignment
+[16] print(A) | A=2, B=3, C=8, D=1, E=6, F=1, G=32, H=9, K=14 | Print A
+[17] print(B) | A=2, B=3, C=8, D=1, E=6, F=1, G=32, H=9, K=14 | Print B
+[18] print(D) print(H) A = A + A | A=2, B=3, C=8, D=1, E=6, F=1, G=32, H=9, K=14 | Print D
+[19] print(H) A = A + A | A=2, B=3, C=8, D=1, E=6, F=1, G=32, H=9, K=14 | Print H
+[20] A = A + A | A=4, B=3, C=8, D=1, E=6, F=1, G=32, H=9, K=14 | Arithmetic operation

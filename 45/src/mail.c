@@ -339,3 +339,132 @@ unsigned int decode_mail_id_from_key(int key) {
     int id = key & 0xFFFF;
     return id;
 }
+
+static unsigned int generate_mail_id() {
+    static unsigned int counter = 0;
+    unsigned int id = counter;
+    counter += 1;
+    return id;
+}
+
+Mail *get_mail_by_id(const MailSystem *sys, unsigned int mail_id) {
+    if (sys == NULL) {
+        return NULL;
+    }
+    for (size_t i = 0; i < sys->mails_count; i++) {
+        if (sys->mails[i]->id == mail_id) {
+            return sys->mails[i];
+        }
+    }
+    return NULL;
+}
+
+enum status create_mail(MailSystem *sys, const char *type, int priority, unsigned int src_office, 
+    unsigned int dst_office, const char *tech_data, unsigned int *out_mail_id) {
+    if (sys == NULL || type == NULL || tech_data == NULL) {
+        return INVALID_ARGS;
+    }
+    Office *src = find_office_by_id(sys, src_office);
+    Office *dst = find_office_by_id(sys, dst_office);
+    if (src == NULL || dst == NULL) {
+        return NOT_FOUND;
+    }
+    if (sys->mails_count + 1 > sys->mails_capacity) {
+        size_t new_capacity;
+        if (sys->mails_capacity == 0) {
+            new_capacity = 4;
+        } else {
+            new_capacity = sys->mails_capacity * 2;
+        }
+        Mail **new_array = (Mail**)realloc(sys->mails, new_capacity * sizeof(Mail*));
+        if (new_array == NULL) {
+            return MEMORY_ERROR;
+        }
+        sys->mails = new_array;
+        sys->mails_capacity = new_capacity;
+    }
+    Mail *m = (Mail*)malloc(sizeof(Mail));
+    if (m == NULL) {
+        return MEMORY_ERROR;
+    }
+    m->id = generate_mail_id();
+    strncpy(m->type, type, sizeof(m->type) - 1);
+    m->type[sizeof(m->type) - 1] = '\0';
+    m->state = MAIL_IN_TRANSIT;
+    m->priority = priority;
+    m->src_office = src_office;
+    m->dst_office = dst_office;
+    strncpy(m->tech_data, tech_data, sizeof(m->tech_data) - 1);
+    m->tech_data[sizeof(m->tech_data) - 1] = '\0';
+    sys->mails[sys->mails_count] = m;
+    sys->mails_count = sys->mails_count + 1;
+    int key = encode_heap_key(priority, m->id);
+    push_heap(&src->mailbox, key);
+    if (out_mail_id != NULL) {
+        *out_mail_id = m->id;
+    }
+    if (sys->log != NULL) {
+        fprintf(sys->log, "CREATE_MAIL: id = %u, type = %s, priority = %d, src = %u, dst = %u\n",
+                m->id, m->type, m->priority, m->src_office, m->dst_office);
+        fflush(sys->log);
+    }
+    return SUCCESS;
+}
+
+enum status mark_mail_undelivered(MailSystem *sys, unsigned int mail_id) {
+    Mail *m = get_mail_by_id(sys, mail_id);
+    if (m == NULL) {
+        return NOT_FOUND;
+    }
+    m->state = MAIL_UNDELIVERED;
+    if (sys->log != NULL) {
+        fprintf(sys->log, "MARK_UNDELIVERED: id = %u\n", mail_id);
+        fflush(sys->log);
+    }
+    return SUCCESS;
+}
+
+enum status take_mail(MailSystem *sys, unsigned int mail_id) {
+    Mail *m = get_mail_by_id(sys, mail_id);
+    if (m == NULL) {
+        return NOT_FOUND;
+    }
+    Office *dst = find_office_by_id(sys, m->dst_office);
+    if (dst == NULL) {
+        return NOT_FOUND;
+    }
+    m->state = MAIL_DELIVERED;
+    if (sys->log != NULL) {
+        fprintf(sys->log, "TAKE_MAIL: id = %u, delivered at office %u\n", mail_id, dst->id);
+        fflush(sys->log);
+    }
+    for (size_t i = 0; i < sys->mails_count; i++) {
+        if (sys->mails[i]->id == mail_id) {
+            free(sys->mails[i]);
+            for (size_t j = i; j < sys->mails_count - 1; j++) {
+                sys->mails[j] = sys->mails[j + 1];
+            }
+            sys->mails_count = sys->mails_count - 1;
+            break;
+        }
+    }
+    return SUCCESS;
+}
+
+enum status mails_to_file(MailSystem *sys, const char *out_path) {
+    if (sys == NULL || out_path == NULL) {
+        return INVALID_ARGS;
+    }
+    FILE *file = fopen(out_path, "w");
+    if (file == NULL) {
+        return FILE_ERROR;
+    }
+    for (size_t i = 0; i < sys->mails_count; i++) {
+        Mail *m = sys->mails[i];
+        fprintf(file, "id = %u, type = %s, state = %d, priority = %d, src = %u, dst = %u, data = %s\n",
+                m->id, m->type, m->state, m->priority,
+                m->src_office, m->dst_office, m->tech_data);
+    }
+    fclose(file);
+    return SUCCESS;
+}

@@ -80,5 +80,6 @@ Office *find_office_by_id(const MailSystem *sys, unsigned int id);
 Mail *get_mail_by_id(const MailSystem *sys, unsigned int mail_id);
 int encode_heap_key(int priority, unsigned int mail_id);
 unsigned int decode_mail_id_from_key(int key);
+enum status deliver_mails(MailSystem *sys);
 
 #endif

@@ -215,6 +215,24 @@ int main(void) {
         printf("Офис 2 корректно повторно удалить нельзя\n");
     }
     printf("\n");
+    printf("deliver_mails\n");
+    create_mail(sys2, "Letter", 5, 1, 2, "Hello", &mail1_id);
+    create_mail(sys2, "Package", 10, 1, 2, "Box", &mail2_id);
+    st = deliver_mails(sys2);
+    if (st == SUCCESS) {
+        printf("Письма обработаны и переданы по офисам\n");
+    }
+    for (size_t i = 0; i < sys2->mails_count; i++) {
+        Mail *m = sys2->mails[i];
+        printf("Mail id = %u, state = %d, src = %u, dst = %u\n", m->id, m->state, m->src_office, m->dst_office);
+    }
+    enum status st2 = read_file(sys2, "45/mappings.txt");
+    if (st2 != SUCCESS) {
+        printf("Ошибка при чтении маппингов: %d\n", st2);
+    } else {
+        printf("Маппинги успешно загружены\n");
+    }
+    printf("\n");
     printf("destroy_system\n");
     destroy_system(sys2);
     return 0;

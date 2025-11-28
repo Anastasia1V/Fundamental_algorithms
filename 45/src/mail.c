@@ -1,6 +1,7 @@
 #include "mail.h"
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 static void replace_each_other(int *a, int *b) {
     if (a == NULL || b == NULL) {
@@ -464,6 +465,134 @@ enum status mails_to_file(MailSystem *sys, const char *out_path) {
         fprintf(file, "id = %u, type = %s, state = %d, priority = %d, src = %u, dst = %u, data = %s\n",
                 m->id, m->type, m->state, m->priority,
                 m->src_office, m->dst_office, m->tech_data);
+    }
+    fclose(file);
+    return SUCCESS;
+}
+
+static enum status send_mail_to_neighbor(MailSystem *sys, unsigned int mail_id, unsigned int current_office) {
+    if (sys == NULL) {
+        return INVALID_ARGS;
+    }
+    Mail *m = get_mail_by_id(sys, mail_id);
+    if (m == NULL) {
+        return NOT_FOUND;
+    }
+    Office *current = find_office_by_id(sys, current_office);
+    if (current == NULL) {
+        return NOT_FOUND;
+    }
+    Office *dst = find_office_by_id(sys, m->dst_office);
+    if (dst == NULL) {
+        return NOT_FOUND;
+    }
+    if (current_office == m->dst_office) {
+        m->state = MAIL_DELIVERED;
+        if (sys->log != NULL) {
+            fprintf(sys->log, "MAIL_DELIVERED: id = %u at office %u\n", m->id, dst->id);
+            fflush(sys->log);
+        }
+        return SUCCESS;
+    }
+    for (size_t i = 0; i < current->neighbors_count; i++) {
+        unsigned int neighbor_id = current->neighbors[i];
+        Office *neighbor = find_office_by_id(sys, neighbor_id);
+        if (neighbor == NULL) {
+            continue;
+        }
+        if (neighbor->mailbox.size < neighbor->capacity) {
+            int key = encode_heap_key(m->priority, m->id);
+            push_heap(&neighbor->mailbox, key);
+            if (sys->log != NULL) {
+                fprintf(sys->log, "MAIL_MOVED: id = %u from office %u to office %u\n",
+                        m->id, current_office, neighbor_id);
+                fflush(sys->log);
+            }
+            return SUCCESS;
+        }
+    }
+    m->state = MAIL_UNDELIVERED;
+    if (sys->log != NULL) {
+        fprintf(sys->log, "MAIL_UNDELIVERED: id = %u at office %u\n", m->id, current_office);
+        fflush(sys->log);
+    }
+    return SUCCESS;
+}
+
+enum status deliver_mails(MailSystem *sys) {
+    if (sys == NULL) {
+        return INVALID_ARGS;
+    }
+    for (size_t i = 0; i < sys->offices_count; i++) {
+        Office *office = &sys->offices[i];
+        size_t heap_size = office->mailbox.size;
+        int *keys_copy = (int*)malloc(heap_size * sizeof(int));
+        if (!keys_copy) {
+            return MEMORY_ERROR;
+        }
+        for (size_t j = 0; j < heap_size; j++) {
+            keys_copy[j] = office->mailbox.data[j];
+        }
+        for (size_t j = 0; j < heap_size; j++) {
+            int key = keys_copy[j];
+            unsigned int mail_id = decode_mail_id_from_key(key);
+            pop_heap(&office->mailbox);
+            send_mail_to_neighbor(sys, mail_id, office->id);
+        }
+        free(keys_copy);
+    }
+    return SUCCESS;
+}
+
+enum status read_file(MailSystem *sys, const char *path) {
+    if (sys == NULL || path == NULL) {
+        return INVALID_ARGS;
+    }
+    FILE *file = fopen(path, "r");
+    if (!file) {
+        return FILE_ERROR;
+    }
+    unsigned int id1, id2;
+    while (fscanf(file, "%u %u", &id1, &id2) == 2) {
+        Office *office1 = find_office_by_id(sys, id1);
+        Office *office2 = find_office_by_id(sys, id2);
+        if (!office1 || !office2) {
+            continue;
+        }
+        int exists = 0;
+        for (size_t i = 0; i < office1->neighbors_count; i++) {
+            if (office1->neighbors[i] == id2) {
+                exists = 1;
+                break;
+            }
+        }
+        if (!exists) {
+            unsigned int *new_neighbors = (unsigned int*)realloc(office1->neighbors, (office1->neighbors_count + 1) * sizeof(unsigned int));
+            if (!new_neighbors) {
+                fclose(file);
+                return MEMORY_ERROR;
+            }
+            office1->neighbors = new_neighbors;
+            office1->neighbors[office1->neighbors_count] = id2;
+            office1->neighbors_count += 1;
+        }
+        exists = 0;
+        for (size_t i = 0; i < office2->neighbors_count; i++) {
+            if (office2->neighbors[i] == id1) {
+                exists = 1;
+                break;
+            }
+        }
+        if (!exists) {
+            unsigned int *new_neighbors = (unsigned int*)realloc(office2->neighbors, (office2->neighbors_count + 1) * sizeof(unsigned int));
+            if (!new_neighbors) {
+                fclose(file);
+                return MEMORY_ERROR;
+            }
+            office2->neighbors = new_neighbors;
+            office2->neighbors[office2->neighbors_count] = id1;
+            office2->neighbors_count += 1;
+        }
     }
     fclose(file);
     return SUCCESS;

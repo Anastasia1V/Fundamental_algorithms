@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <limits.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <pthread.h>
 
 enum status {
     SUCCESS,
@@ -54,6 +56,9 @@ typedef struct MailSystem {
     size_t mails_capacity;
     FILE *log;
     char log_path[256];
+    pthread_mutex_t lock;
+    pthread_t delivery_tid;
+    int delivery_running;
 } MailSystem;
 
 Heap create_heap(size_t initial_capacity);
@@ -71,15 +76,18 @@ void destroy_system(MailSystem *sys);
 enum status read_file(MailSystem *sys, const char *path);
 enum status add_office(MailSystem *sys, unsigned int id, size_t capacity, const unsigned int *neighbors, size_t neighbors_count);
 enum status delete_office(MailSystem *sys, unsigned int id);
+int office_exists(const MailSystem *sys, unsigned int id);
+Office *find_office_by_id(const MailSystem *sys, unsigned int id);
 enum status create_mail(MailSystem *sys, const char *type, int priority, unsigned int src_office, unsigned int dst_office, const char *tech_data, unsigned int *out_mail_id);
 enum status mark_mail_undelivered(MailSystem *sys, unsigned int mail_id);
 enum status take_mail(MailSystem *sys, unsigned int mail_id);
 enum status mails_to_file(MailSystem *sys, const char *out_path);
-enum status time(MailSystem *sys);
-Office *find_office_by_id(const MailSystem *sys, unsigned int id);
 Mail *get_mail_by_id(const MailSystem *sys, unsigned int mail_id);
 int encode_heap_key(int priority, unsigned int mail_id);
 unsigned int decode_mail_id_from_key(int key);
+int decode_priority_from_key(int key);
 enum status deliver_mails(MailSystem *sys);
+enum status start_delivery_thread(MailSystem *sys);
+enum status stop_delivery_thread(MailSystem *sys);
 
 #endif

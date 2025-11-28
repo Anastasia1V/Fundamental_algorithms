@@ -1,7 +1,10 @@
 #include "mail.h"
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
+#include <errno.h>
+#include <stdint.h>
+#include <time.h>
+#include <unistd.h>
 
 static void replace_each_other(int *a, int *b) {
     if (a == NULL || b == NULL) {
@@ -222,12 +225,21 @@ MailSystem *create_system(const char *log_path) {
     }
     strncpy(sys->log_path, log_path, sizeof(sys->log_path)-1);
     sys->log_path[sizeof(sys->log_path)-1] = '\0';
+    pthread_mutex_init(&sys->lock, NULL);
+    sys->delivery_running = 0;
     return sys;
 }
 
 void destroy_system(MailSystem *sys) {
     if (!sys) {
         return;
+    }
+    pthread_mutex_lock(&sys->lock);
+    if (sys->delivery_running) {
+        sys->delivery_running = 0;
+        pthread_mutex_unlock(&sys->lock);
+        pthread_join(sys->delivery_tid, NULL);
+        pthread_mutex_lock(&sys->lock);
     }
     if (sys->offices) {
         for (size_t i = 0; i < sys->offices_count; i++) {
@@ -247,6 +259,8 @@ void destroy_system(MailSystem *sys) {
     if (sys->log) {
         fclose(sys->log);
     }
+    pthread_mutex_unlock(&sys->lock);
+    pthread_mutex_destroy(&sys->lock);
     free(sys);
 }
 
@@ -267,11 +281,14 @@ enum status add_office(MailSystem *sys, unsigned int id, size_t capacity,
     if (!sys) {
         return INVALID_ARGS;
     }
+    pthread_mutex_lock(&sys->lock);
     if (find_office_by_id(sys, id)) {
+        pthread_mutex_unlock(&sys->lock);
         return ALREADY_EXISTS;
     }
     Office *new_offices = (Office*)realloc(sys->offices, (sys->offices_count + 1) * sizeof(Office));
     if (!new_offices) {
+        pthread_mutex_unlock(&sys->lock);
         return MEMORY_ERROR;
     }
     sys->offices = new_offices;
@@ -283,6 +300,7 @@ enum status add_office(MailSystem *sys, unsigned int id, size_t capacity,
     if (neighbors_count > 0) {
         office->neighbors = (unsigned int*)malloc(neighbors_count * sizeof(unsigned int));
         if (!office->neighbors) {
+            pthread_mutex_unlock(&sys->lock);
             return MEMORY_ERROR;
         }
         for (size_t i = 0; i < neighbors_count; i++) {
@@ -294,6 +312,7 @@ enum status add_office(MailSystem *sys, unsigned int id, size_t capacity,
         office->neighbors_count = 0;
     }
     sys->offices_count += 1;
+    pthread_mutex_unlock(&sys->lock);
     return SUCCESS;
 }
 
@@ -301,6 +320,7 @@ enum status delete_office(MailSystem *sys, unsigned int id) {
     if (!sys) {
         return INVALID_ARGS;
     }
+    pthread_mutex_lock(&sys->lock);
     size_t index = 0;
     int found = 0;
     for (size_t i = 0; i < sys->offices_count; i++) {
@@ -311,6 +331,7 @@ enum status delete_office(MailSystem *sys, unsigned int id) {
         }
     }
     if (!found) {
+        pthread_mutex_unlock(&sys->lock);
         return NOT_FOUND;
     }
     delete_heap(&sys->offices[index].mailbox);
@@ -328,7 +349,42 @@ enum status delete_office(MailSystem *sys, unsigned int id) {
         Office *tmp = (Office*)realloc(sys->offices, sys->offices_count * sizeof(Office));
         if (tmp) sys->offices = tmp;
     }
+    for (size_t i = 0; i < sys->offices_count; i++) {
+        size_t k = 0;
+        for (size_t j = 0; j < sys->offices[i].neighbors_count; j++) {
+            if (sys->offices[i].neighbors[j] == id) continue;
+            sys->offices[i].neighbors[k++] = sys->offices[i].neighbors[j];
+        }
+        if (k != sys->offices[i].neighbors_count) {
+            if (k == 0) {
+                free(sys->offices[i].neighbors);
+                sys->offices[i].neighbors = NULL;
+                sys->offices[i].neighbors_count = 0;
+            } else {
+                unsigned int *tmpn = (unsigned int*)realloc(sys->offices[i].neighbors, k * sizeof(unsigned int));
+                if (tmpn) {
+                    sys->offices[i].neighbors = tmpn;
+                    sys->offices[i].neighbors_count = k;
+                } else {
+                    sys->offices[i].neighbors_count = k;
+                }
+            }
+        }
+    }
+    pthread_mutex_unlock(&sys->lock);
     return SUCCESS;
+}
+
+int office_exists(const MailSystem *sys, unsigned int id) {
+    if (!sys) {
+        return 0;
+    }
+    for (size_t i = 0; i < sys->offices_count; i++) {
+        if (sys->offices[i].id == id) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 int encode_heap_key(int priority, unsigned int mail_id) {
@@ -339,6 +395,11 @@ int encode_heap_key(int priority, unsigned int mail_id) {
 unsigned int decode_mail_id_from_key(int key) {
     int id = key & 0xFFFF;
     return id;
+}
+
+int decode_priority_from_key(int key) {
+    int pr = (key >> 16) & 0xFFFF;
+    return pr;
 }
 
 static unsigned int generate_mail_id() {
@@ -365,10 +426,16 @@ enum status create_mail(MailSystem *sys, const char *type, int priority, unsigne
     if (sys == NULL || type == NULL || tech_data == NULL) {
         return INVALID_ARGS;
     }
+    pthread_mutex_lock(&sys->lock);
     Office *src = find_office_by_id(sys, src_office);
     Office *dst = find_office_by_id(sys, dst_office);
     if (src == NULL || dst == NULL) {
+        pthread_mutex_unlock(&sys->lock);
         return NOT_FOUND;
+    }
+    if (src->mailbox.size >= src->capacity) {
+        pthread_mutex_unlock(&sys->lock);
+        return MEMORY_ERROR;
     }
     if (sys->mails_count + 1 > sys->mails_capacity) {
         size_t new_capacity;
@@ -379,6 +446,7 @@ enum status create_mail(MailSystem *sys, const char *type, int priority, unsigne
         }
         Mail **new_array = (Mail**)realloc(sys->mails, new_capacity * sizeof(Mail*));
         if (new_array == NULL) {
+            pthread_mutex_unlock(&sys->lock);
             return MEMORY_ERROR;
         }
         sys->mails = new_array;
@@ -386,6 +454,7 @@ enum status create_mail(MailSystem *sys, const char *type, int priority, unsigne
     }
     Mail *m = (Mail*)malloc(sizeof(Mail));
     if (m == NULL) {
+        pthread_mutex_unlock(&sys->lock);
         return MEMORY_ERROR;
     }
     m->id = generate_mail_id();
@@ -409,12 +478,15 @@ enum status create_mail(MailSystem *sys, const char *type, int priority, unsigne
                 m->id, m->type, m->priority, m->src_office, m->dst_office);
         fflush(sys->log);
     }
+    pthread_mutex_unlock(&sys->lock);
     return SUCCESS;
 }
 
 enum status mark_mail_undelivered(MailSystem *sys, unsigned int mail_id) {
+    pthread_mutex_lock(&sys->lock);
     Mail *m = get_mail_by_id(sys, mail_id);
     if (m == NULL) {
+        pthread_mutex_unlock(&sys->lock);
         return NOT_FOUND;
     }
     m->state = MAIL_UNDELIVERED;
@@ -422,16 +494,20 @@ enum status mark_mail_undelivered(MailSystem *sys, unsigned int mail_id) {
         fprintf(sys->log, "MARK_UNDELIVERED: id = %u\n", mail_id);
         fflush(sys->log);
     }
+    pthread_mutex_unlock(&sys->lock);
     return SUCCESS;
 }
 
 enum status take_mail(MailSystem *sys, unsigned int mail_id) {
+    pthread_mutex_lock(&sys->lock);
     Mail *m = get_mail_by_id(sys, mail_id);
     if (m == NULL) {
+        pthread_mutex_unlock(&sys->lock);
         return NOT_FOUND;
     }
     Office *dst = find_office_by_id(sys, m->dst_office);
     if (dst == NULL) {
+        pthread_mutex_unlock(&sys->lock);
         return NOT_FOUND;
     }
     m->state = MAIL_DELIVERED;
@@ -449,6 +525,7 @@ enum status take_mail(MailSystem *sys, unsigned int mail_id) {
             break;
         }
     }
+    pthread_mutex_unlock(&sys->lock);
     return SUCCESS;
 }
 
@@ -456,8 +533,10 @@ enum status mails_to_file(MailSystem *sys, const char *out_path) {
     if (sys == NULL || out_path == NULL) {
         return INVALID_ARGS;
     }
+    pthread_mutex_lock(&sys->lock);
     FILE *file = fopen(out_path, "w");
     if (file == NULL) {
+        pthread_mutex_unlock(&sys->lock);
         return FILE_ERROR;
     }
     for (size_t i = 0; i < sys->mails_count; i++) {
@@ -467,6 +546,7 @@ enum status mails_to_file(MailSystem *sys, const char *out_path) {
                 m->src_office, m->dst_office, m->tech_data);
     }
     fclose(file);
+    pthread_mutex_unlock(&sys->lock);
     return SUCCESS;
 }
 
@@ -491,6 +571,16 @@ static enum status send_mail_to_neighbor(MailSystem *sys, unsigned int mail_id, 
         if (sys->log != NULL) {
             fprintf(sys->log, "MAIL_DELIVERED: id = %u at office %u\n", m->id, dst->id);
             fflush(sys->log);
+        }
+        for (size_t i = 0; i < sys->mails_count; i++) {
+            if (sys->mails[i]->id == m->id) {
+                free(sys->mails[i]);
+                for (size_t j = i; j < sys->mails_count - 1; j++) {
+                    sys->mails[j] = sys->mails[j + 1];
+                }
+                sys->mails_count = sys->mails_count - 1;
+                break;
+            }
         }
         return SUCCESS;
     }
@@ -523,24 +613,66 @@ enum status deliver_mails(MailSystem *sys) {
     if (sys == NULL) {
         return INVALID_ARGS;
     }
+    pthread_mutex_lock(&sys->lock);
     for (size_t i = 0; i < sys->offices_count; i++) {
         Office *office = &sys->offices[i];
-        size_t heap_size = office->mailbox.size;
-        int *keys_copy = (int*)malloc(heap_size * sizeof(int));
-        if (!keys_copy) {
-            return MEMORY_ERROR;
-        }
-        for (size_t j = 0; j < heap_size; j++) {
-            keys_copy[j] = office->mailbox.data[j];
-        }
-        for (size_t j = 0; j < heap_size; j++) {
-            int key = keys_copy[j];
-            unsigned int mail_id = decode_mail_id_from_key(key);
-            pop_heap(&office->mailbox);
-            send_mail_to_neighbor(sys, mail_id, office->id);
-        }
-        free(keys_copy);
+        if (office->mailbox.size == 0) continue;
+        int key = pop_heap(&office->mailbox);
+        if (key == INT_MIN) continue;
+        unsigned int mail_id = decode_mail_id_from_key(key);
+        send_mail_to_neighbor(sys, mail_id, office->id);
     }
+    pthread_mutex_unlock(&sys->lock);
+    return SUCCESS;
+}
+
+static void sleep_200ms(void) {
+    clock_t start = clock();
+    while ((clock() - start) < CLOCKS_PER_SEC / 5) 
+    {
+    }
+}
+
+static void *delivery_thread_func(void *arg) {
+    MailSystem *sys = (MailSystem*)arg;
+    while (1) {
+        pthread_mutex_lock(&sys->lock);
+        int run = sys->delivery_running;
+        pthread_mutex_unlock(&sys->lock);
+        if (!run) break;
+        deliver_mails(sys);
+        sleep_200ms();
+    }
+    return NULL;
+}
+
+enum status start_delivery_thread(MailSystem *sys) {
+    if (sys == NULL) return INVALID_ARGS;
+    pthread_mutex_lock(&sys->lock);
+    if (sys->delivery_running) {
+        pthread_mutex_unlock(&sys->lock);
+        return SUCCESS;
+    }
+    sys->delivery_running = 1;
+    if (pthread_create(&sys->delivery_tid, NULL, delivery_thread_func, sys) != 0) {
+        sys->delivery_running = 0;
+        pthread_mutex_unlock(&sys->lock);
+        return FILE_ERROR;
+    }
+    pthread_mutex_unlock(&sys->lock);
+    return SUCCESS;
+}
+
+enum status stop_delivery_thread(MailSystem *sys) {
+    if (sys == NULL) return INVALID_ARGS;
+    pthread_mutex_lock(&sys->lock);
+    if (!sys->delivery_running) {
+        pthread_mutex_unlock(&sys->lock);
+        return SUCCESS;
+    }
+    sys->delivery_running = 0;
+    pthread_mutex_unlock(&sys->lock);
+    pthread_join(sys->delivery_tid, NULL);
     return SUCCESS;
 }
 
@@ -548,16 +680,33 @@ enum status read_file(MailSystem *sys, const char *path) {
     if (sys == NULL || path == NULL) {
         return INVALID_ARGS;
     }
+    pthread_mutex_lock(&sys->lock);
     FILE *file = fopen(path, "r");
     if (!file) {
+        pthread_mutex_unlock(&sys->lock);
         return FILE_ERROR;
     }
     unsigned int id1, id2;
     while (fscanf(file, "%u %u", &id1, &id2) == 2) {
         Office *office1 = find_office_by_id(sys, id1);
         Office *office2 = find_office_by_id(sys, id2);
-        if (!office1 || !office2) {
-            continue;
+        if (!office1) {
+            pthread_mutex_unlock(&sys->lock);
+            if (add_office(sys, id1, 5, NULL, 0) != SUCCESS) {
+                fclose(file);
+                return MEMORY_ERROR;
+            }
+            pthread_mutex_lock(&sys->lock);
+            office1 = find_office_by_id(sys, id1);
+        }
+        if (!office2) {
+            pthread_mutex_unlock(&sys->lock);
+            if (add_office(sys, id2, 5, NULL, 0) != SUCCESS) {
+                fclose(file);
+                return MEMORY_ERROR;
+            }
+            pthread_mutex_lock(&sys->lock);
+            office2 = find_office_by_id(sys, id2);
         }
         int exists = 0;
         for (size_t i = 0; i < office1->neighbors_count; i++) {
@@ -570,6 +719,7 @@ enum status read_file(MailSystem *sys, const char *path) {
             unsigned int *new_neighbors = (unsigned int*)realloc(office1->neighbors, (office1->neighbors_count + 1) * sizeof(unsigned int));
             if (!new_neighbors) {
                 fclose(file);
+                pthread_mutex_unlock(&sys->lock);
                 return MEMORY_ERROR;
             }
             office1->neighbors = new_neighbors;
@@ -587,6 +737,7 @@ enum status read_file(MailSystem *sys, const char *path) {
             unsigned int *new_neighbors = (unsigned int*)realloc(office2->neighbors, (office2->neighbors_count + 1) * sizeof(unsigned int));
             if (!new_neighbors) {
                 fclose(file);
+                pthread_mutex_unlock(&sys->lock);
                 return MEMORY_ERROR;
             }
             office2->neighbors = new_neighbors;
@@ -595,5 +746,6 @@ enum status read_file(MailSystem *sys, const char *path) {
         }
     }
     fclose(file);
+    pthread_mutex_unlock(&sys->lock);
     return SUCCESS;
 }

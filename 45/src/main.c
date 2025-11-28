@@ -1,104 +1,235 @@
 #include "mail.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
 #include <limits.h>
+#include <errno.h>
 
-int main(void) {
-    MailSystem *sys2 = create_system("mail_log.txt");
-    if (sys2 != NULL) {
-        printf("Система успешно создана\n");
+void help(void) {
+    printf("Меню:\n");
+    printf("0. Выход\n");
+    printf("1. Добавить офис\n");
+    printf("2. Удалить офис\n");
+    printf("3. Создать письмо\n");
+    printf("4. Пометить письмо как недоставленное\n");
+    printf("5. Доставить письмо вручную (взять письмо)\n");
+    printf("6. Записать письма в файл\n");
+}
+
+static int parse_int_from_fgets(const char *prompt, int *out) {
+    char buf[256];
+    char *endptr;
+    long val;
+    printf("%s", prompt);
+    if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
+    errno = 0;
+    val = strtol(buf, &endptr, 10);
+    if (endptr == buf) return 0;
+    while (*endptr == ' ' || *endptr == '\t') endptr++;
+    if (*endptr != '\n' && *endptr != '\0') return 0;
+    if ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) return 0;
+    if (val < INT_MIN || val > INT_MAX) return 0;
+    *out = (int)val;
+    return 1;
+}
+
+static int parse_uint_from_fgets(const char *prompt, unsigned int *out) {
+    char buf[256];
+    char *endptr;
+    unsigned long val;
+    printf("%s", prompt);
+    if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
+    errno = 0;
+    val = strtoul(buf, &endptr, 10);
+    if (endptr == buf) return 0;
+    while (*endptr == ' ' || *endptr == '\t') endptr++;
+    if (*endptr != '\n' && *endptr != '\0') return 0;
+    if (val > UINT_MAX) return 0;
+    *out = (unsigned int)val;
+    return 1;
+}
+
+static int parse_string_from_fgets(const char *prompt, char *out, size_t out_size) {
+    char buf[512];
+    printf("%s", prompt);
+    if (fgets(buf, sizeof(buf), stdin) == NULL) return 0;
+    size_t len = strlen(buf);
+    if (len > 0 && buf[len-1] == '\n') buf[len-1] = '\0';
+    // copy at most out_size-1 chars
+    if (out_size == 0) return 0;
+    buf[out_size-1] = '\0';
+    strncpy(out, buf, out_size);
+    return 1;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Использование: %s <mappings_file> <log_path>\n", argv[0]);
+        return 1;
     }
-    printf("\n");
-    printf("add_office\n");
-    unsigned int neighbors12[] = {2};
-    unsigned int neighbors22[] = {1};
-    enum status st;
-    st = add_office(sys2, 1, 10, neighbors12, 1);
-    if (st == SUCCESS) {
-        printf("Офис 1 добавлен\n");
-    }
-    st = add_office(sys2, 2, 5, neighbors22, 1);
-    if (st == SUCCESS) {
-        printf("Офис 2 добавлен\n");
-    }
-    st = add_office(sys2, 1, 5, NULL, 0);
-    if (st == ALREADY_EXISTS) {
-        printf("Дубликат офиса 1 корректно не добавлен\n");
-    }
-    printf("\n");
-    printf("find_office_by_id\n");
-    Office *office2 = find_office_by_id(sys2, 1);
-    if (office2 != NULL) {
-        printf("Найден офис 1, capacity = %zu, neighbors_count = %zu\n", office2->capacity, office2->neighbors_count);
-    }
-    office2 = find_office_by_id(sys2, 3);
-    if (office2 == NULL) {
-        printf("Офис 3 корректно не найден\n");
-    }
-    printf("\n");
-    printf("create_mail\n");
-    unsigned int mail1_id, mail2_id;
-    st = create_mail(sys2, "Letter", 5, 1, 2, "Hello", &mail1_id);
-    if (st == SUCCESS) {
-        printf("Письмо 1 создано, id = %u\n", mail1_id);
-    }
-    st = create_mail(sys2, "Package", 10, 1, 2, "Box", &mail2_id);
-    if (st == SUCCESS) {
-        printf("Письмо 2 создано, id = %u\n", mail2_id);
-    }
-    printf("\n");
-    printf("get_mail_by_id\n");
-    Mail *m = get_mail_by_id(sys2, mail1_id);
-    if (m != NULL) {
-        printf("Найдено письмо id = %u, type = %s, state = %d\n", m->id, m->type, m->state);
-    }
-    printf("\n");
-    printf("mark_mail_undelivered\n");
-    st = mark_mail_undelivered(sys2, mail1_id);
-    if (st == SUCCESS) {
-        printf("Письмо id = %u помечено недоставленным\n", mail1_id);
-    }
-    printf("\n");
-    printf("take_mail\n");
-    st = take_mail(sys2, mail2_id);
-    if (st == SUCCESS) {
-        printf("Письмо id = %u доставлено\n", mail2_id);
-    }
-    printf("\n");
-    printf("mails_to_file\n");
-    st = mails_to_file(sys2, "out_mails.txt");
-    if (st == SUCCESS) {
-        printf("Письма записаны в out_mails.txt\n");
-    }
-    printf("\n");
-    printf("delete_office\n");
-    st = delete_office(sys2, 2);
-    if (st == SUCCESS) {
-        printf("Офис 2 успешно удалён\n");
-    }
-    st = delete_office(sys2, 2);
-    if (st == NOT_FOUND) {
-        printf("Офис 2 корректно повторно удалить нельзя\n");
-    }
-    printf("\n");
-    printf("deliver_mails\n");
-    create_mail(sys2, "Letter", 5, 1, 2, "Hello", &mail1_id);
-    create_mail(sys2, "Package", 10, 1, 2, "Box", &mail2_id);
-    st = deliver_mails(sys2);
-    if (st == SUCCESS) {
-        printf("Письма обработаны и переданы по офисам\n");
-    }
-    for (size_t i = 0; i < sys2->mails_count; i++) {
-        Mail *m = sys2->mails[i];
-        printf("Mail id = %u, state = %d, src = %u, dst = %u\n", m->id, m->state, m->src_office, m->dst_office);
-    }
-    enum status st2 = read_file(sys2, "45/mappings.txt");
-    if (st2 != SUCCESS) {
-        printf("Ошибка при чтении маппингов: %d\n", st2);
+    const char *map_path = argv[1];
+    const char *log_path;
+    if (argc >= 3) {
+        log_path = argv[2];
     } else {
-        printf("Маппинги успешно загружены\n");
+        log_path = "log.txt";
     }
-    printf("\n");
-    printf("destroy_system\n");
-    destroy_system(sys2);
+    MailSystem *sys = create_system(log_path);
+    if (sys == NULL) {
+        fprintf(stderr, "Ошибка: не удалось создать систему почты.\n");
+        return 1;
+    }
+    if (read_file(sys, map_path) != SUCCESS) {
+        fprintf(stderr, "Ошибка: не удалось прочитать файл связей %s.\n", map_path);
+        destroy_system(sys);
+        return 1;
+    }
+    if (start_delivery_thread(sys) != SUCCESS) {
+        fprintf(stderr, "Ошибка: не удалось запустить поток доставки.\n");
+        destroy_system(sys);
+        return 1;
+    }
+    help();
+    while (1) {
+        printf("\n");
+        printf("Выберите команду: ");
+        char input[256];
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            continue;
+        }
+        int v = (int)strtol(input, NULL, 10);
+        if (v == 0) {
+            printf("Выход.\n");
+            break;
+        } else if (v == 1) {
+            unsigned int id;
+            int capacity;
+            int n;
+            if (!parse_uint_from_fgets("ID нового офиса: ", &id)) {
+                printf("Неверный ввод ID.\n");
+                continue;
+            }
+            if (!parse_int_from_fgets("Вместимость: ", &capacity)) {
+                printf("Неверный ввод вместимости.\n");
+                continue;
+            }
+            if (!parse_int_from_fgets("Количество соседей: ", &n)) {
+                printf("Неверный ввод количества соседей.\n");
+                continue;
+            }
+            if (n < 0 || n > 1024) {
+                printf("Неверное количество соседей (0<=n<=1024)\n");
+                continue;
+            }
+            unsigned int *neighbors = NULL;
+            if (n > 0) {
+                neighbors = (unsigned int*)malloc((size_t)n * sizeof(unsigned int));
+                if (!neighbors) {
+                    printf("Ошибка памяти при выделении соседей.\n");
+                    continue;
+                }
+                int ok = 1;
+                for (int i = 0; i < n; i++) {
+                    char prompt[64];
+                    snprintf(prompt, sizeof(prompt), "ID соседа %d: ", i + 1);
+                    if (!parse_uint_from_fgets(prompt, &neighbors[i])) {
+                        neighbors[i] = 0;
+                    }
+                }
+                if (!ok) {
+                    free(neighbors);
+                    continue;
+                }
+            }
+            if (add_office(sys, id, (size_t)capacity, neighbors, (size_t)n) != SUCCESS) {
+                printf("Ошибка добавления офиса\n");
+            }
+            else {
+                printf("Офис добавлен успешно\n");
+            }
+            if (neighbors) free(neighbors);
+        } else if (v == 2) {
+            unsigned int id;
+            if (!parse_uint_from_fgets("ID офиса для удаления: ", &id)) {
+                printf("Неверный ввод.\n");
+                continue;
+            }
+            if (delete_office(sys, id) != SUCCESS) {
+                printf("Ошибка удаления офиса\n");
+            } else {
+                printf("Офис удалён успешно\n");
+            }
+        } else if (v == 3) {
+            char type[32];
+            char data[256];
+            int priority;
+            unsigned int src;
+            unsigned int dst;
+            if (!parse_string_from_fgets("Тип письма: ", type, sizeof(type))) {
+                printf("Неверный ввод типа.\n");
+                continue;
+            }
+            if (!parse_int_from_fgets("Приоритет (целое): ", &priority)) {
+                printf("Неверный ввод приоритета.\n");
+                continue;
+            }
+            if (!parse_uint_from_fgets("От какого офиса (ID): ", &src)) {
+                printf("Неверный ввод src.\n");
+                continue;
+            }
+            if (!parse_uint_from_fgets("До какого офиса (ID): ", &dst)) {
+                printf("Неверный ввод dst.\n");
+                continue;
+            }
+            if (!parse_string_from_fgets("Данные письма: ", data, sizeof(data))) {
+                printf("Неверный ввод данных.\n");
+                continue;
+            }
+            unsigned int mail_id;
+            if (create_mail(sys, type, priority, src, dst, data, &mail_id) != SUCCESS) {
+                printf("Ошибка создания письма\n");
+            } else {
+                printf("Письмо %u успешно создано\n", mail_id);
+            }
+        } else if (v == 4) {
+            unsigned int id;
+            if (!parse_uint_from_fgets("ID письма для пометки недоставленным: ", &id)) {
+                printf("Неверный ввод.\n");
+                continue;
+            }
+            if (mark_mail_undelivered(sys, id) != SUCCESS) {
+                printf("Ошибка пометки письма\n");
+            } else {
+                printf("Письмо %u помечено как недоставленное\n", id);
+            }
+        } else if (v == 5) {
+            unsigned int id;
+            if (!parse_uint_from_fgets("ID письма для доставки вручную: ", &id)) {
+                printf("Неверный ввод.\n");
+                continue;
+            }
+            if (take_mail(sys, id) != SUCCESS) {
+                printf("Ошибка доставки письма\n");
+            } else {
+                printf("Письмо %u доставлено вручную\n", id);
+            }
+        } else if (v == 6) {
+            char path[256];
+            if (!parse_string_from_fgets("Имя файла для сохранения писем: ", path, sizeof(path))) {
+                printf("Неверный ввод.\n");
+                continue;
+            }
+            if (mails_to_file(sys, path) != SUCCESS) {
+                printf("Ошибка записи писем в файл\n");
+            } else {
+                printf("Письма успешно записаны в %s\n", path);
+            }
+        } else {
+            printf("Неизвестная команда, попробуйте снова\n");
+        }
+    }
+    stop_delivery_thread(sys);
+    destroy_system(sys);
+    return 0;
 }

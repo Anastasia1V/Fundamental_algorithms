@@ -1,0 +1,10 @@
+Line 1: A = 2
+ -> 2
+Line 2: B=3
+ -> 3
+Line 3: C   =  A^B
+ -> 8
+Line 4: D=2^5
+ -> 32
+Line 5: E = C^B
+ -> 512

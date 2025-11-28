@@ -19,6 +19,15 @@ int main() {
         if (length == 0 || str[0] == '\n' || str[0] == '\0') {
             break;
         }
+        int is_negative = 0;
+        if (str[0] == '-') {
+            is_negative = 1;
+            size_t index = 0;
+            while (str[index] != '\0') {
+                str[index] = str[index + 1];
+                index += 1;
+            }
+        }
         unsigned int base = 0;
         unsigned long long number = 0;
         int read = sscanf(str, "%llu %u", &number, &base);
@@ -34,7 +43,11 @@ int main() {
         }
         enum status st = number_to_base(number, base, out, sizeof(out));
         if (st == SUCCESS) {
-            printf("%s\n", out);
+            if (is_negative) {
+                printf("-%s\n", out);
+            } else {
+                printf("%s\n", out);
+            }
         } else if (st == MEMORY_ERROR) {
             fprintf(stderr, "Ошибка памяти для %llu\n", number);
         } else {

@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void replace_each_other(int *a, int *b)  {
+static void replace_each_other(int *a, int *b) {
     if (a == NULL || b == NULL) {
         return;
     }
@@ -11,7 +11,7 @@ static void replace_each_other(int *a, int *b)  {
     *b = c;
 }
 
-static void put_up(Heap *h, size_t index)  {
+static void put_up(Heap *h, size_t index) {
     if (h == NULL || h->data == NULL) {
         return;
     }
@@ -25,7 +25,7 @@ static void put_up(Heap *h, size_t index)  {
     }
 }
 
-static void put_down(Heap *h, size_t index)  {
+static void put_down(Heap *h, size_t index) {
     if (h == NULL || h->data == NULL) {
         return;
     }
@@ -47,7 +47,7 @@ static void put_down(Heap *h, size_t index)  {
     }
 }
 
-Heap create_heap(size_t initial_capacity)  {
+Heap create_heap(size_t initial_capacity) {
     Heap h;
     h.data = NULL;
     h.size = 0;
@@ -67,7 +67,7 @@ Heap create_heap(size_t initial_capacity)  {
     return h;
 }
 
-void delete_heap(Heap *h)  {
+void delete_heap(Heap *h) {
     if (h == NULL) {
         return;
     }
@@ -79,7 +79,7 @@ void delete_heap(Heap *h)  {
     h->capacity = 0;
 }
 
-int is_empty_heap(const Heap *h)  {
+int is_empty_heap(const Heap *h) {
     if (h == NULL) {
         return 1;
     }
@@ -89,21 +89,21 @@ int is_empty_heap(const Heap *h)  {
     return 0;
 }
 
-size_t size_heap(const Heap *h)  {
+size_t size_heap(const Heap *h) {
     if (h == NULL) {
         return 0;
     }
     return h->size;
 }
 
-int peek_heap(const Heap *h)  {
+int peek_heap(const Heap *h) {
     if (h == NULL || h->data == NULL || h->size == 0) {
         return INT_MIN;
     }
     return h->data[0];
 }
 
-void push_heap(Heap *h, int value)  {
+void push_heap(Heap *h, int value) {
     if (h == NULL) {
         return;
     }
@@ -133,7 +133,7 @@ void push_heap(Heap *h, int value)  {
     put_up(h, index);
 }
 
-int pop_heap(Heap *h)  {
+int pop_heap(Heap *h) {
     if (h == NULL || h->data == NULL || h->size == 0) {
         return INT_MIN;
     }
@@ -148,7 +148,7 @@ int pop_heap(Heap *h)  {
     return element;
 }
 
-Heap build_heap(const int *array, size_t n)  {
+Heap build_heap(const int *array, size_t n) {
     Heap h;
     h.data = NULL;
     h.size = 0;
@@ -183,7 +183,7 @@ Heap build_heap(const int *array, size_t n)  {
     return h;
 }
 
-int is_equal_heap(const Heap *h1, const Heap *h2)  {
+int is_equal_heap(const Heap *h1, const Heap *h2) {
     if (h1 == NULL && h2 == NULL) {
         return 1;
     }
@@ -199,4 +199,143 @@ int is_equal_heap(const Heap *h1, const Heap *h2)  {
         }
     }
     return 1;
+}
+
+MailSystem *create_system(const char *log_path) {
+    if (log_path == NULL) {
+        return NULL;
+    }
+    MailSystem *sys = (MailSystem*)malloc(sizeof(MailSystem));
+    if (!sys) {
+        return NULL;
+    }
+    sys->offices = NULL;
+    sys->offices_count = 0;
+    sys->mails = NULL;
+    sys->mails_count = 0;
+    sys->mails_capacity = 0;
+    sys->log = fopen(log_path, "w");
+    if (!sys->log) {
+        free(sys);
+        return NULL;
+    }
+    strncpy(sys->log_path, log_path, sizeof(sys->log_path)-1);
+    sys->log_path[sizeof(sys->log_path)-1] = '\0';
+    return sys;
+}
+
+void destroy_system(MailSystem *sys) {
+    if (!sys) {
+        return;
+    }
+    if (sys->offices) {
+        for (size_t i = 0; i < sys->offices_count; i++) {
+            delete_heap(&sys->offices[i].mailbox);
+            if (sys->offices[i].neighbors) {
+                free(sys->offices[i].neighbors);
+            }
+        }
+        free(sys->offices);
+    }
+    if (sys->mails) {
+        for (size_t i = 0; i < sys->mails_count; i++) {
+            free(sys->mails[i]);
+        }
+        free(sys->mails);
+    }
+    if (sys->log) {
+        fclose(sys->log);
+    }
+    free(sys);
+}
+
+Office *find_office_by_id(const MailSystem *sys, unsigned int id) {
+    if (!sys) {
+        return NULL;
+    }
+    for (size_t i = 0; i < sys->offices_count; i++) {
+        if (sys->offices[i].id == id) {
+            return &sys->offices[i];
+        }
+    }
+    return NULL;
+}
+
+enum status add_office(MailSystem *sys, unsigned int id, size_t capacity,
+                       const unsigned int *neighbors, size_t neighbors_count) {
+    if (!sys) {
+        return INVALID_ARGS;
+    }
+    if (find_office_by_id(sys, id)) {
+        return ALREADY_EXISTS;
+    }
+    Office *new_offices = (Office*)realloc(sys->offices, (sys->offices_count + 1) * sizeof(Office));
+    if (!new_offices) {
+        return MEMORY_ERROR;
+    }
+    sys->offices = new_offices;
+    Office *office = &sys->offices[sys->offices_count];
+    office->id = id;
+    office->capacity = capacity;
+    office->available = 1;
+    office->mailbox = create_heap(capacity);
+    if (neighbors_count > 0) {
+        office->neighbors = (unsigned int*)malloc(neighbors_count * sizeof(unsigned int));
+        if (!office->neighbors) {
+            return MEMORY_ERROR;
+        }
+        for (size_t i = 0; i < neighbors_count; i++) {
+            office->neighbors[i] = neighbors[i];
+        }
+        office->neighbors_count = neighbors_count;
+    } else {
+        office->neighbors = NULL;
+        office->neighbors_count = 0;
+    }
+    sys->offices_count += 1;
+    return SUCCESS;
+}
+
+enum status delete_office(MailSystem *sys, unsigned int id) {
+    if (!sys) {
+        return INVALID_ARGS;
+    }
+    size_t index = 0;
+    int found = 0;
+    for (size_t i = 0; i < sys->offices_count; i++) {
+        if (sys->offices[i].id == id) {
+            index = i;
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        return NOT_FOUND;
+    }
+    delete_heap(&sys->offices[index].mailbox);
+    if (sys->offices[index].neighbors) {
+        free(sys->offices[index].neighbors);
+    }
+    for (size_t i = index; i < sys->offices_count - 1; i++) {
+        sys->offices[i] = sys->offices[i+1];
+    }
+    sys->offices_count -= 1;
+    if (sys->offices_count == 0) {
+        free(sys->offices);
+        sys->offices = NULL;
+    } else {
+        Office *tmp = (Office*)realloc(sys->offices, sys->offices_count * sizeof(Office));
+        if (tmp) sys->offices = tmp;
+    }
+    return SUCCESS;
+}
+
+int encode_heap_key(int priority, unsigned int mail_id) {
+    int number = (priority << 16) | (mail_id & 0xFFFF);
+    return number;
+}
+
+unsigned int decode_mail_id_from_key(int key) {
+    int id = key & 0xFFFF;
+    return id;
 }
